@@ -114,6 +114,21 @@ textarea:focus-visible{outline:2px solid var(--blue)}
   .grid2{grid-template-columns:1fr}
   .pane{overflow:visible}
 }
+@media (max-width:600px){
+  .sets{grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px 8px}
+  .sets .stepper button{width:40px;height:46px;font-size:22px}
+  .sets .stepper input{width:64px;height:46px;font-size:20px}
+  .sets .stepper.mini input{width:58px;font-size:16px}
+  .sets .btn.small{padding:8px 10px;font-size:14px;white-space:nowrap}
+  .sets .num{font-size:15px}
+  .sets .setrow{flex-wrap:wrap!important;gap:6px!important}
+  .sets .warmlbl{display:none}
+  .sets .stepper.mini button{width:34px;height:40px;font-size:18px}
+  .sets .stepper.mini input{width:50px;height:40px;font-size:15px}
+  .card{padding:14px 14px}
+  .card > .row.spread h2{font-size:21px}
+  input[type=number]{width:96px;font-size:20px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -136,15 +151,15 @@ const DAY_NAME = {push:'Push', pull:'Pull', legs:'Legs'};
 const EX = [
  {id:'ohp',      day:'push', name:'Overhead press',          sets:5, reps:5, load:'bar',     inc:{kg:2.5, lb:5},   primary:['front_delts','side_delts'], secondary:['triceps','abs'],            std:[0.45,0.65,0.95,1.30,1.65]},
  {id:'dbbench',  day:'push', name:'Dumbbell bench press',     sets:3, reps:5, load:'db',      inc:{kg:2.5, lb:5},   primary:['chest'],                    secondary:['front_delts','triceps'],   std:[0.17,0.29,0.43,0.60,0.80]},
- {id:'dips',     day:'push', name:'Dips',                     sets:3, reps:8, load:'bw',      inc:{kg:2.5, lb:5},   primary:['chest','triceps'],          secondary:['front_delts','abs'],       std:[0.85,1.15,1.50,1.90,2.30]},
+ {id:'incdb',    day:'push', name:'Incline dumbbell press',   sets:3, reps:8, load:'db',      inc:{kg:2.5, lb:5},   primary:['chest','front_delts'],      secondary:['triceps'],                 std:[0.14,0.24,0.36,0.50,0.68]},
  {id:'latraise', day:'push', name:'Lateral raise',            sets:3, reps:8, load:'db',      inc:{kg:1, lb:2.5},   primary:['side_delts'],               secondary:['traps'],                   std:[0.07,0.12,0.19,0.28,0.38]},
- {id:'lyingext', day:'push', name:'Lying dumbbell extension', sets:3, reps:8, load:'db',      inc:{kg:1, lb:2.5},   primary:['triceps'],                  secondary:[],                          std:[0.10,0.17,0.26,0.37,0.50]},
+ {id:'ohext',    day:'push', name:'Overhead cable extension',  sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['triceps'],                  secondary:[],                          std:[0.25,0.42,0.62,0.88,1.15]},
  {id:'pushdown', day:'push', name:'Tricep pushdown',          sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['triceps'],                  secondary:[],                          std:[0.30,0.50,0.75,1.05,1.40]},
 
  {id:'pullup',   day:'pull', name:'Pull-up',                  sets:5, reps:5, load:'bw',      inc:{kg:2.5, lb:5},   primary:['lats'],                     secondary:['biceps','rear_delts','forearms'], std:[0.80,1.10,1.45,1.85,2.25], alt:'pulldown'},
  {id:'pulldown', day:'pull', name:'Lat pulldown',             sets:5, reps:5, load:'machine', inc:{kg:2.5, lb:5},   primary:['lats'],                     secondary:['biceps','rear_delts'],     std:[0.55,0.85,1.20,1.60,2.00], alt:'pullup'},
  {id:'bbrow',    day:'pull', name:'Bent-over barbell row',    sets:3, reps:5, load:'bar',     inc:{kg:2.5, lb:5},   primary:['lats','traps'],             secondary:['biceps','rear_delts','lower_back'], std:[0.50,0.80,1.15,1.55,1.95]},
- {id:'tbar',     day:'pull', name:'T-bar row',                sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['lats'],                     secondary:['traps','biceps','rear_delts'], std:[0.55,0.85,1.20,1.60,2.05]},
+ {id:'cablerow', day:'pull', name:'Seated cable row',         sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['lats'],                     secondary:['traps','biceps','rear_delts'], std:[0.55,0.85,1.20,1.60,2.00]},
  {id:'shrug',    day:'pull', name:'Dumbbell shrug',           sets:3, reps:8, load:'db',      inc:{kg:2.5, lb:5},   primary:['traps'],                    secondary:['forearms'],                std:[0.30,0.50,0.75,1.05,1.40]},
  {id:'preacher', day:'pull', name:'Preacher curl',            sets:3, reps:8, load:'bar',     inc:{kg:1, lb:2.5},   primary:['biceps'],                   secondary:['forearms'],                std:[0.25,0.40,0.60,0.85,1.10]},
  {id:'hammer',   day:'pull', name:'Hammer curl',              sets:3, reps:8, load:'db',      inc:{kg:1, lb:2.5},   primary:['biceps','forearms'],        secondary:[],                          std:[0.12,0.20,0.30,0.42,0.55]},
@@ -485,8 +500,8 @@ function renderToday(){
       const label = st.warm? '<span class="warm">W</span>' : String(++n);
       const wField = st.warm? `<div class="row" style="gap:6px;flex-wrap:nowrap"><div class="stepper mini"><button data-a="-" data-ws="${i}">−</button><input type="number" value="${+fromKg(st.w).toFixed(1)}" data-ww="${e.id}" data-s="${i}"><button data-a="+" data-ws="${i}">+</button></div><span class="faint" style="font-size:12px">${unit()}</span></div>` : '';
       h+=`<div class="num ${done?'done':''}">${label}</div>
-        <div class="row" style="gap:8px;flex-wrap:nowrap">${wField}<div class="stepper"><button data-a="-" data-s="${i}">−</button><input type="number" value="${done?st.r:e.reps}" data-r="${e.id}" data-s="${i}"><button data-a="+" data-s="${i}">+</button></div></div>
-        <div class="num ${done?'':'faint'}">${st.warm?'<span class="faint" style="font-size:13px">warm-up</span>':val}</div>
+        <div class="row setrow" style="gap:8px;flex-wrap:nowrap">${wField}<div class="stepper"><button data-a="-" data-s="${i}">−</button><input type="number" value="${done?st.r:e.reps}" data-r="${e.id}" data-s="${i}"><button data-a="+" data-s="${i}">+</button></div></div>
+        <div class="num ${done?'':'faint'}">${st.warm?'<span class="faint warmlbl" style="font-size:13px">warm-up</span>':val}</div>
         <div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn small ${done?'ghost':'primary'}" data-log="${e.id}" data-s="${i}">${done?'Logged':'Log set'}</button>${st.warm?`<button class="xbtn" data-rm="${e.id}" data-s="${i}" title="Remove warm-up">×</button>`:''}</div>`; });
     h+=`</div>${calib?'':`<button class="btn small ghost" style="margin-top:10px" data-addwarm="${e.id}">+ Warm-up set</button>`}</div>`; }
   h+=`<div class="card"><h3 style="margin-bottom:8px">Notes</h3><textarea id="notes" placeholder="Form cues, sleep, aches, anything worth remembering">${draft.notes||''}</textarea></div>`;
