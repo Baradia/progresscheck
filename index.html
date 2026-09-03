@@ -94,6 +94,9 @@ textarea:focus-visible{outline:2px solid var(--blue)}
 .toast.on{opacity:1}
 .setup{max-width:520px;margin:0 auto;padding:40px 24px}
 .hidden{display:none!important}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--panel);border-radius:18px 18px 0 0;padding:18px 18px 28px;width:100%;max-width:720px;max-height:88vh;overflow:auto;border:1px solid var(--line)}
+@media (min-width:700px){.overlay{align-items:center}.sheet{border-radius:18px}}
 .mus{cursor:pointer;stroke:var(--bg);stroke-width:1.5;transition:fill .25s}
 .mus:hover{stroke:var(--ink)}
 .mus.sel{stroke:var(--ink);stroke-width:2.5}
@@ -145,32 +148,83 @@ const MUSCLES = {
 const DAYS = ['push','pull','legs'];
 const DAY_NAME = {push:'Push', pull:'Pull', legs:'Legs'};
 
-/* load: bar = total bar weight, db = weight of ONE dumbbell, bw = added weight on top of bodyweight (negative = assisted), machine = stack/plates.
-   std = male 1RM-to-bodyweight ratios [beginner, novice, intermediate, advanced, elite].
-   Compiled from published strength-standard tables (StrengthLevel / Symmetric Strength style ratios for 18-39 male, ~70 kg). Approximate. */
-const EX = [
- {id:'ohp',      day:'push', name:'Overhead press',          sets:5, reps:5, load:'bar',     inc:{kg:2.5, lb:5},   primary:['front_delts','side_delts'], secondary:['triceps','abs'],            std:[0.45,0.65,0.95,1.30,1.65]},
- {id:'dbbench',  day:'push', name:'Dumbbell bench press',     sets:3, reps:5, load:'db',      inc:{kg:2.5, lb:5},   primary:['chest'],                    secondary:['front_delts','triceps'],   std:[0.17,0.29,0.43,0.60,0.80]},
- {id:'incdb',    day:'push', name:'Incline dumbbell press',   sets:3, reps:8, load:'db',      inc:{kg:2.5, lb:5},   primary:['chest','front_delts'],      secondary:['triceps'],                 std:[0.14,0.24,0.36,0.50,0.68]},
- {id:'latraise', day:'push', name:'Lateral raise',            sets:3, reps:8, load:'db',      inc:{kg:1, lb:2.5},   primary:['side_delts'],               secondary:['traps'],                   std:[0.07,0.12,0.19,0.28,0.38]},
- {id:'ohext',    day:'push', name:'Overhead cable extension',  sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['triceps'],                  secondary:[],                          std:[0.25,0.42,0.62,0.88,1.15]},
- {id:'pushdown', day:'push', name:'Tricep pushdown',          sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['triceps'],                  secondary:[],                          std:[0.30,0.50,0.75,1.05,1.40]},
-
- {id:'pullup',   day:'pull', name:'Pull-up',                  sets:5, reps:5, load:'bw',      inc:{kg:2.5, lb:5},   primary:['lats'],                     secondary:['biceps','rear_delts','forearms'], std:[0.80,1.10,1.45,1.85,2.25], alt:'pulldown'},
- {id:'pulldown', day:'pull', name:'Lat pulldown',             sets:5, reps:5, load:'machine', inc:{kg:2.5, lb:5},   primary:['lats'],                     secondary:['biceps','rear_delts'],     std:[0.55,0.85,1.20,1.60,2.00], alt:'pullup'},
- {id:'bbrow',    day:'pull', name:'Bent-over barbell row',    sets:3, reps:5, load:'bar',     inc:{kg:2.5, lb:5},   primary:['lats','traps'],             secondary:['biceps','rear_delts','lower_back'], std:[0.50,0.80,1.15,1.55,1.95]},
- {id:'cablerow', day:'pull', name:'Seated cable row',         sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['lats'],                     secondary:['traps','biceps','rear_delts'], std:[0.55,0.85,1.20,1.60,2.00]},
- {id:'shrug',    day:'pull', name:'Dumbbell shrug',           sets:3, reps:8, load:'db',      inc:{kg:2.5, lb:5},   primary:['traps'],                    secondary:['forearms'],                std:[0.30,0.50,0.75,1.05,1.40]},
- {id:'preacher', day:'pull', name:'Preacher curl',            sets:3, reps:8, load:'bar',     inc:{kg:1, lb:2.5},   primary:['biceps'],                   secondary:['forearms'],                std:[0.25,0.40,0.60,0.85,1.10]},
- {id:'hammer',   day:'pull', name:'Hammer curl',              sets:3, reps:8, load:'db',      inc:{kg:1, lb:2.5},   primary:['biceps','forearms'],        secondary:[],                          std:[0.12,0.20,0.30,0.42,0.55]},
-
- {id:'squat',    day:'legs', name:'Barbell squat',            sets:5, reps:5, load:'bar',     inc:{kg:5, lb:10},    primary:['quads','glutes'],           secondary:['hamstrings','lower_back','abs'], std:[0.75,1.25,1.70,2.15,2.60]},
- {id:'deadlift', day:'legs', name:'Deadlift',                 sets:3, reps:5, load:'bar',     inc:{kg:5, lb:10},    primary:['hamstrings','glutes','lower_back'], secondary:['quads','traps','forearms'], std:[0.95,1.45,1.95,2.50,3.05]},
- {id:'legpress', day:'legs', name:'Leg press',                sets:3, reps:8, load:'machine', inc:{kg:5, lb:10},    primary:['quads','glutes'],           secondary:['hamstrings'],              std:[1.20,1.90,2.70,3.60,4.50]},
- {id:'legcurl',  day:'legs', name:'Lying leg curl',           sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['hamstrings'],               secondary:['calves'],                  std:[0.35,0.60,0.90,1.25,1.65]},
- {id:'legext',   day:'legs', name:'Leg extension',            sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['quads'],                    secondary:[],                          std:[0.45,0.75,1.15,1.60,2.10]},
- {id:'calf',     day:'legs', name:'Seated calf raise',        sets:3, reps:8, load:'machine', inc:{kg:2.5, lb:5},   primary:['calves'],                   secondary:[],                          std:[0.40,0.70,1.05,1.45,1.90]},
+/* Exercise database. load: bar = total bar weight, db = ONE dumbbell, bw = added weight (negative = assisted), machine = stack/plates.
+   std = male 1RM / bodyweight ratios [beginner, novice, intermediate, advanced, elite], compiled from published strength-standard tables (approximate). */
+const EXDB = [
+ // chest
+ {id:'bench',    name:'Barbell bench press',       load:'bar',     inc:{kg:2.5,lb:5},  def:{sets:3,reps:5}, primary:['chest'],               secondary:['front_delts','triceps'],   std:[0.60,0.95,1.30,1.65,2.00]},
+ {id:'incbench', name:'Incline barbell bench',     load:'bar',     inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['chest','front_delts'], secondary:['triceps'],                 std:[0.50,0.80,1.10,1.45,1.80]},
+ {id:'dbbench',  name:'Dumbbell bench press',      load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:5}, primary:['chest'],               secondary:['front_delts','triceps'],   std:[0.17,0.29,0.43,0.60,0.80]},
+ {id:'incdb',    name:'Incline dumbbell press',    load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['chest','front_delts'], secondary:['triceps'],                 std:[0.14,0.24,0.36,0.50,0.68]},
+ {id:'chestpress',name:'Machine chest press',      load:'machine', inc:{kg:5,lb:10},   def:{sets:3,reps:8}, primary:['chest'],               secondary:['front_delts','triceps'],   std:[0.60,0.95,1.35,1.80,2.30]},
+ {id:'pecdeck',  name:'Pec deck',                  load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['chest'],               secondary:[],                          std:[0.50,0.80,1.15,1.55,2.00]},
+ {id:'cablefly', name:'Cable fly',                 load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['chest'],               secondary:['front_delts'],             std:[0.20,0.35,0.50,0.70,0.90]},
+ {id:'dips',     name:'Dips',                      load:'bw',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['chest','triceps'],     secondary:['front_delts'],             std:[0.85,1.15,1.50,1.90,2.30]},
+ // shoulders
+ {id:'ohp',      name:'Overhead press',            load:'bar',     inc:{kg:2.5,lb:5},  def:{sets:5,reps:5}, primary:['front_delts','side_delts'], secondary:['triceps','abs'],      std:[0.45,0.65,0.95,1.30,1.65]},
+ {id:'dbshoulder',name:'Seated dumbbell press',    load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['front_delts','side_delts'], secondary:['triceps'],            std:[0.15,0.25,0.38,0.53,0.70]},
+ {id:'machshoulder',name:'Machine shoulder press', load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['front_delts','side_delts'], secondary:['triceps'],            std:[0.45,0.70,1.00,1.35,1.75]},
+ {id:'latraise', name:'Lateral raise',             load:'db',      inc:{kg:1,lb:2.5},  def:{sets:3,reps:8}, primary:['side_delts'],          secondary:['traps'],                   std:[0.07,0.12,0.19,0.28,0.38]},
+ {id:'cablelat', name:'Cable lateral raise',       load:'machine', inc:{kg:1,lb:2.5},  def:{sets:3,reps:12},primary:['side_delts'],          secondary:[],                          std:[0.05,0.09,0.14,0.20,0.28]},
+ {id:'facepull', name:'Face pull',                 load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:12},primary:['rear_delts'],          secondary:['traps'],                   std:[0.25,0.40,0.60,0.85,1.10]},
+ {id:'rearfly',  name:'Rear delt fly',             load:'db',      inc:{kg:1,lb:2.5},  def:{sets:3,reps:12},primary:['rear_delts'],          secondary:['traps'],                   std:[0.06,0.10,0.16,0.24,0.33]},
+ {id:'upright',  name:'Upright row',               load:'bar',     inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['side_delts','traps'],  secondary:['biceps'],                  std:[0.30,0.50,0.75,1.00,1.30]},
+ // triceps
+ {id:'pushdown', name:'Tricep pushdown',           load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['triceps'],             secondary:[],                          std:[0.30,0.50,0.75,1.05,1.40]},
+ {id:'ohext',    name:'Overhead cable extension',  load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['triceps'],             secondary:[],                          std:[0.25,0.42,0.62,0.88,1.15]},
+ {id:'skull',    name:'Skull crusher (EZ bar)',    load:'bar',     inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['triceps'],             secondary:[],                          std:[0.25,0.40,0.60,0.85,1.10]},
+ {id:'lyingext', name:'Lying dumbbell extension',  load:'db',      inc:{kg:1,lb:2.5},  def:{sets:3,reps:8}, primary:['triceps'],             secondary:[],                          std:[0.10,0.17,0.26,0.37,0.50]},
+ {id:'cgbench',  name:'Close-grip bench press',    load:'bar',     inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['triceps','chest'],     secondary:['front_delts'],             std:[0.50,0.80,1.15,1.50,1.85]},
+ // back
+ {id:'pullup',   name:'Pull-up',                   load:'bw',      inc:{kg:2.5,lb:5},  def:{sets:5,reps:5}, primary:['lats'],                secondary:['biceps','rear_delts','forearms'], std:[0.80,1.10,1.45,1.85,2.25]},
+ {id:'chinup',   name:'Chin-up',                   load:'bw',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:6}, primary:['lats','biceps'],       secondary:['rear_delts','forearms'],   std:[0.85,1.15,1.50,1.90,2.30]},
+ {id:'pulldown', name:'Lat pulldown',              load:'machine', inc:{kg:2.5,lb:5},  def:{sets:5,reps:5}, primary:['lats'],                secondary:['biceps','rear_delts'],     std:[0.55,0.85,1.20,1.60,2.00]},
+ {id:'bbrow',    name:'Bent-over barbell row',     load:'bar',     inc:{kg:2.5,lb:5},  def:{sets:3,reps:5}, primary:['lats','traps'],        secondary:['biceps','rear_delts','lower_back'], std:[0.50,0.80,1.15,1.55,1.95]},
+ {id:'cablerow', name:'Seated cable row',          load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['lats'],                secondary:['traps','biceps','rear_delts'], std:[0.55,0.85,1.20,1.60,2.00]},
+ {id:'tbar',     name:'T-bar row',                 load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['lats'],                secondary:['traps','biceps','rear_delts'], std:[0.55,0.85,1.20,1.60,2.05]},
+ {id:'csrow',    name:'Chest-supported row',       load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['lats','traps'],        secondary:['biceps','rear_delts'],     std:[0.50,0.80,1.15,1.55,1.95]},
+ {id:'dbrow',    name:'Single-arm dumbbell row',   load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['lats'],                secondary:['biceps','rear_delts','traps'], std:[0.25,0.40,0.60,0.85,1.10]},
+ {id:'sapulldown',name:'Straight-arm pulldown',    load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['lats'],                secondary:['triceps'],                 std:[0.25,0.40,0.60,0.85,1.10]},
+ {id:'shrug',    name:'Dumbbell shrug',            load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['traps'],               secondary:['forearms'],                std:[0.30,0.50,0.75,1.05,1.40]},
+ {id:'bbshrug',  name:'Barbell shrug',             load:'bar',     inc:{kg:5,lb:10},   def:{sets:3,reps:8}, primary:['traps'],               secondary:['forearms'],                std:[0.70,1.10,1.60,2.10,2.70]},
+ {id:'backext',  name:'Back extension',            load:'bw',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['lower_back'],          secondary:['glutes','hamstrings'],     std:[0.90,1.10,1.35,1.60,1.90]},
+ // biceps / forearms
+ {id:'preacher', name:'Preacher curl',             load:'bar',     inc:{kg:1,lb:2.5},  def:{sets:3,reps:8}, primary:['biceps'],              secondary:['forearms'],                std:[0.25,0.40,0.60,0.85,1.10]},
+ {id:'hammer',   name:'Hammer curl',               load:'db',      inc:{kg:1,lb:2.5},  def:{sets:3,reps:8}, primary:['biceps','forearms'],   secondary:[],                          std:[0.12,0.20,0.30,0.42,0.55]},
+ {id:'bbcurl',   name:'Barbell curl',              load:'bar',     inc:{kg:1,lb:2.5},  def:{sets:3,reps:8}, primary:['biceps'],              secondary:['forearms'],                std:[0.30,0.50,0.70,0.95,1.20]},
+ {id:'dbcurl',   name:'Dumbbell curl',             load:'db',      inc:{kg:1,lb:2.5},  def:{sets:3,reps:8}, primary:['biceps'],              secondary:['forearms'],                std:[0.10,0.18,0.28,0.40,0.52]},
+ {id:'inccurl',  name:'Incline dumbbell curl',     load:'db',      inc:{kg:1,lb:2.5},  def:{sets:3,reps:10},primary:['biceps'],              secondary:[],                          std:[0.08,0.15,0.23,0.33,0.45]},
+ {id:'cablecurl',name:'Cable curl',                load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['biceps'],              secondary:['forearms'],                std:[0.30,0.50,0.70,0.95,1.20]},
+ {id:'revcurl',  name:'Reverse curl',              load:'bar',     inc:{kg:1,lb:2.5},  def:{sets:3,reps:10},primary:['forearms','biceps'],   secondary:[],                          std:[0.20,0.33,0.50,0.70,0.90]},
+ {id:'wristcurl',name:'Wrist curl',                load:'bar',     inc:{kg:1,lb:2.5},  def:{sets:3,reps:12},primary:['forearms'],            secondary:[],                          std:[0.20,0.35,0.50,0.70,0.90]},
+ // legs
+ {id:'squat',    name:'Barbell squat',             load:'bar',     inc:{kg:5,lb:10},   def:{sets:5,reps:5}, primary:['quads','glutes'],      secondary:['hamstrings','lower_back','abs'], std:[0.75,1.25,1.70,2.15,2.60]},
+ {id:'frontsquat',name:'Front squat',              load:'bar',     inc:{kg:5,lb:10},   def:{sets:3,reps:5}, primary:['quads'],               secondary:['glutes','abs'],            std:[0.60,1.00,1.40,1.80,2.20]},
+ {id:'goblet',   name:'Goblet squat',              load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['quads','glutes'],      secondary:['abs'],                     std:[0.25,0.45,0.65,0.90,1.15]},
+ {id:'deadlift', name:'Deadlift',                  load:'bar',     inc:{kg:5,lb:10},   def:{sets:3,reps:5}, primary:['hamstrings','glutes','lower_back'], secondary:['quads','traps','forearms'], std:[0.95,1.45,1.95,2.50,3.05]},
+ {id:'sumo',     name:'Sumo deadlift',             load:'bar',     inc:{kg:5,lb:10},   def:{sets:3,reps:5}, primary:['glutes','hamstrings','quads'], secondary:['lower_back','traps'], std:[0.95,1.45,1.95,2.50,3.05]},
+ {id:'rdl',      name:'Romanian deadlift',         load:'bar',     inc:{kg:5,lb:10},   def:{sets:3,reps:8}, primary:['hamstrings','glutes'], secondary:['lower_back','forearms'],   std:[0.70,1.10,1.55,2.00,2.50]},
+ {id:'legpress', name:'Leg press',                 load:'machine', inc:{kg:5,lb:10},   def:{sets:3,reps:8}, primary:['quads','glutes'],      secondary:['hamstrings'],              std:[1.20,1.90,2.70,3.60,4.50]},
+ {id:'hack',     name:'Hack squat',                load:'machine', inc:{kg:5,lb:10},   def:{sets:3,reps:8}, primary:['quads'],               secondary:['glutes'],                  std:[0.90,1.50,2.20,3.00,3.80]},
+ {id:'bss',      name:'Bulgarian split squat',     load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['quads','glutes'],      secondary:['hamstrings'],              std:[0.15,0.30,0.45,0.65,0.85]},
+ {id:'lunge',    name:'Walking lunge',             load:'db',      inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['quads','glutes'],      secondary:['hamstrings'],              std:[0.15,0.28,0.42,0.60,0.80]},
+ {id:'hipthrust',name:'Barbell hip thrust',        load:'bar',     inc:{kg:5,lb:10},   def:{sets:3,reps:8}, primary:['glutes'],              secondary:['hamstrings'],              std:[0.80,1.30,1.90,2.60,3.30]},
+ {id:'legcurl',  name:'Lying leg curl',            load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['hamstrings'],          secondary:['calves'],                  std:[0.35,0.60,0.90,1.25,1.65]},
+ {id:'slegcurl', name:'Seated leg curl',           load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:10},primary:['hamstrings'],          secondary:[],                          std:[0.35,0.60,0.90,1.25,1.65]},
+ {id:'legext',   name:'Leg extension',             load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['quads'],               secondary:[],                          std:[0.45,0.75,1.15,1.60,2.10]},
+ {id:'calf',     name:'Seated calf raise',         load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:8}, primary:['calves'],              secondary:[],                          std:[0.40,0.70,1.05,1.45,1.90]},
+ {id:'stcalf',   name:'Standing calf raise',       load:'machine', inc:{kg:5,lb:10},   def:{sets:3,reps:10},primary:['calves'],              secondary:[],                          std:[0.60,1.00,1.50,2.00,2.60]},
+ {id:'abduct',   name:'Hip abduction machine',     load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:12},primary:['glutes'],              secondary:[],                          std:[0.50,0.80,1.10,1.50,1.90]},
+ // abs
+ {id:'cablecrunch',name:'Cable crunch',            load:'machine', inc:{kg:2.5,lb:5},  def:{sets:3,reps:12},primary:['abs'],                 secondary:[],                          std:[0.30,0.50,0.75,1.00,1.30]},
+ {id:'hlr',      name:'Hanging leg raise',         load:'bw',      inc:{kg:1,lb:2.5},  def:{sets:3,reps:10},primary:['abs'],                 secondary:['forearms'],                std:[0.90,1.05,1.25,1.50,1.75]},
 ];
+const DEFAULT_ROUTINE = {
+  push:['ohp','dbbench','incdb','latraise','ohext','pushdown'],
+  pull:['pullup','bbrow','cablerow','shrug','preacher','hammer'],
+  legs:['squat','deadlift','legpress','legcurl','legext','calf'],
+};
+
 const LEVELS = ['Beginner','Novice','Intermediate','Advanced','Elite'];
 // Age multiplier applied to standards (strength peaks roughly 20-35).
 function ageFactor(a){ if(a<18) return .88; if(a<=35) return 1; if(a<=45) return .95; if(a<=55) return .88; if(a<=65) return .80; return .70; }
@@ -184,8 +238,10 @@ const store={
   token(){ try{ return localStorage.getItem(TKEY)||memTok; }catch(e){ return memTok; } },
   setToken(t){ memTok=t; try{ t?localStorage.setItem(TKEY,t):localStorage.removeItem(TKEY); }catch(e){} }
 };
-let S = store.load() || null;
-function blank(){ return {profile:null, bw:[], sessions:[], settings:{rest:120}, updatedAt:0}; }
+let S = migrate(store.load()) || null;
+function defaultRoutine(pull){ const r={}; for(const d of DAYS) r[d]=DEFAULT_ROUTINE[d].map(id=>{ if(id==='pullup'&&pull==='pulldown') id='pulldown'; const b=EXDB.find(e=>e.id===id); return {id,sets:b.def.sets,reps:b.def.reps}; }); return r; }
+function blank(){ return {profile:null, bw:[], sessions:[], settings:{rest:120}, routine:null, exlog:[], updatedAt:0}; }
+function migrate(d){ if(!d) return d; if(!d.exlog) d.exlog=[]; if(!d.routine && d.profile) d.routine=defaultRoutine(d.profile.pull); return d; }
 function save(){ S.updatedAt=Date.now(); store.save(S); schedulePush(); }
 
 /* ============ GITHUB GIST SYNC ============ */
@@ -211,7 +267,7 @@ async function readGist(id){
 function merge(a,b){ // union of two ledgers; newer wins on scalar conflicts
   if(!a) return b; if(!b) return a;
   const [n,o]= (a.updatedAt||0)>=(b.updatedAt||0)?[a,b]:[b,a];
-  const out=blank(); out.profile=n.profile||o.profile; out.settings={...o.settings,...n.settings}; out.updatedAt=Math.max(a.updatedAt||0,b.updatedAt||0);
+  const out=blank(); out.profile=n.profile||o.profile; out.settings={...o.settings,...n.settings}; out.routine=n.routine||o.routine||null; const ex_={}; for(const x of [...(o.exlog||[]),...(n.exlog||[])]) ex_[x.ts]=x; out.exlog=Object.values(ex_).sort((x,y)=>x.ts-y.ts); out.updatedAt=Math.max(a.updatedAt||0,b.updatedAt||0);
   const sess={}; for(const x of [...o.sessions,...n.sessions]) sess[x.id]=x; out.sessions=Object.values(sess).sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:x.id-y.id);
   const bw={}; for(const x of [...o.bw,...n.bw]) bw[x.date]=x; out.bw=Object.values(bw).sort((x,y)=>x.date<y.date?-1:1);
   return out;
@@ -220,7 +276,7 @@ async function signIn(token){
   store.setToken(token.trim()); setSync('busy','Checking token');
   const u=await gh('/user'); sync.user=u.login;
   const id=await findGist(); const remote=id?await readGist(id):null;
-  const merged=merge(S,remote); if(merged){ S=merged; store.save(S); }
+  const merged=migrate(merge(S,remote)); if(merged){ S=merged; store.save(S); }
   if(!id){ const g=await gh('/gists','POST',{description:GIST_DESC,public:false,files:{[GIST_FILE]:{content:JSON.stringify(S||blank())}}}); sync.gistId=g.id; }
   else if(S) await pushNow();
   setSync('ok','Signed in as '+u.login);
@@ -238,7 +294,7 @@ async function pullNow(){
   if(!store.token()) return; setSync('busy','Downloading');
   try{ if(!sync.user){ const u=await gh('/user'); sync.user=u.login; }
     const id=await findGist(); if(!id){ setSync('ok','No remote data yet'); return; }
-    const remote=await readGist(id); const before=JSON.stringify(S); const merged=merge(S,remote);
+    const remote=await readGist(id); const before=JSON.stringify(S); const merged=migrate(merge(S,remote));
     if(JSON.stringify(merged)!==before){ S=merged; store.save(S); render(); }
     if(remote && JSON.stringify(merged)!==JSON.stringify(remote)) await pushNow(); else setSync('ok','Synced '+new Date().toLocaleTimeString());
   }catch(e){ setSync('err',e.message); }
@@ -255,21 +311,27 @@ function fmtW(kg,d=1){ const v=fromKg(kg); return (Math.round(v/0.5)*0.5).toFixe
 function unit(){ return S.profile.units; }
 function today(){ return new Date().toISOString().slice(0,10); }
 function fmtDate(iso){ const d=new Date(iso+'T12:00'); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
-function ex(id){ return EX.find(e=>e.id===id); }
-function activeEx(day){ return EX.filter(e=>e.day===day && !(e.alt && S.profile.pull!==e.id && (e.id==='pullup'||e.id==='pulldown'))); }
+function ex(id){ const b=EXDB.find(e=>e.id===id); if(!b) return null; for(const d of DAYS){ const r=((S.routine||{})[d]||[]).find(x=>x.id===id); if(r) return {...b,day:d,sets:r.sets,reps:r.reps}; } return {...b,day:null,sets:b.def.sets,reps:b.def.reps}; }
+function activeEx(day){ return ((S.routine||{})[day]||[]).map(r=>ex(r.id)).filter(Boolean); }
+function routineEx(){ return DAYS.flatMap(activeEx); }
+function addedOn(id){ let last=null; for(const x of (S.exlog||[])) if(x.id===id && x.action==='add') last=x.date; return last; }
+function addedTs(id){ let last=null; for(const x of (S.exlog||[])) if(x.id===id && x.action==='add') last=x.ts; return last; }
+function needsCalib(id){ return !!addedOn(id) && history(id).length===0; }
 function currentBw(){ return S.bw.length? S.bw[S.bw.length-1].kg : S.profile.weightKg; }
 function e1rm(e,wKg,reps){ const r=Math.max(1,Math.min(12,reps)); const load = e.load==='bw'? currentBw()+wKg : wKg; return load*(1+r/30); }
 function setsFor(e){ return e.sets; }
 
 // All logged sessions for an exercise: [{date, best:e1rm, sets, allHit}]
-function history(id){
-  const e=ex(id); const out=[];
-  for(const s of S.sessions){ const en=s.entries[id]; if(!en) continue;
+function historyAll(id){ return history(id,true); }
+function history(id,all){
+  const e=ex(id); if(!e) return []; const out=[]; const since=all?null:addedTs(id);
+  for(const s of S.sessions){ const en=s.entries[id]; if(!en) continue; if(since && s.id<since) continue;
     const sets=en.sets.filter(x=>x.r>0 && !x.warm);
     if(!sets.length) continue;
     const best=Math.max(...sets.map(x=>e1rmAt(e,x.w,x.r,s.bwKg)));
-    const allHit = !s.calibration && sets.length>=e.sets && sets.every(x=>x.r>=e.reps);
-    out.push({id:s.id,notes:s.notes,date:s.date,best,sets,allHit,calibration:s.calibration,tonnage:sets.reduce((a,x)=>a+x.w*x.r,0)});
+    const cal=!!(s.calibration||en.calib);
+    const allHit = !cal && sets.length>=e.sets && sets.every(x=>x.r>=e.reps);
+    out.push({id:s.id,notes:s.notes,date:s.date,best,sets,allHit,calibration:cal,tonnage:sets.reduce((a,x)=>a+x.w*x.r,0)});
   }
   return out;
 }
@@ -289,7 +351,7 @@ function levelScore(e, value){
 function levelName(sc){ if(sc<0) return 'Untrained'; return LEVELS[Math.min(4,Math.floor(sc))]; }
 function exScore(id){ const l=latest(id); return l? levelScore(ex(id), l.best) : null; }
 function muscleScore(m){
-  const ids=EX.filter(e=>e.primary.includes(m)).map(e=>e.id);
+  const ids=routineEx().filter(e=>e.primary.includes(m)).map(e=>e.id);
   const sc=ids.map(exScore).filter(x=>x!==null);
   return sc.length? sc.reduce((a,b)=>a+b,0)/sc.length : null;
 }
@@ -411,6 +473,23 @@ function render(){
   ({today:renderToday, body:renderMuscle, progress:renderProgress, calendar:renderCalendar, settings:renderSettings, edit:renderEdit})[view]();
 }
 
+/* ---- Exercise picker ---- */
+function openPicker(day){
+  const inUse=new Set(routineEx().map(e=>e.id)); let q='', mf='';
+  const ov=document.createElement('div'); ov.className='overlay'; document.body.appendChild(ov);
+  const draw=()=>{ const list=EXDB.filter(e=>!inUse.has(e.id) && (!mf||e.primary.includes(mf)||e.secondary.includes(mf)) && e.name.toLowerCase().includes(q.toLowerCase()));
+    ov.innerHTML=`<div class="sheet"><div class="row spread"><h2>Add to ${DAY_NAME[day]} day</h2><button class="xbtn" id="pclose">×</button></div>
+      <input type="text" id="pq" placeholder="Search" value="${q}" style="width:100%;text-align:left;font-family:var(--body);font-size:16px;margin:10px 0">
+      <div class="row" style="gap:6px;margin-bottom:10px">${Object.keys(MUSCLES).map(m=>`<button class="pill ${mf===m?'blue':''}" data-mf="${m}" style="border:0;cursor:pointer">${MUSCLES[m]}</button>`).join('')}</div>
+      <div class="exlist">${list.map(e=>`<button data-pick="${e.id}"><div class="row spread"><b>${e.name}</b><span class="faint" style="font-size:13px">${e.def.sets}×${e.def.reps} · ${{bar:'barbell',db:'dumbbell',bw:'bodyweight',machine:'machine'}[e.load]}</span></div><div class="faint" style="font-size:13px">${e.primary.map(m=>MUSCLES[m]).join(', ')}${historyAll(e.id).length?' · has earlier history':''}</div></button>`).join('')||'<div class="faint">Nothing matches.</div>'}</div></div>`;
+    $('#pclose',ov).onclick=()=>ov.remove(); ov.onclick=ev=>{ if(ev.target===ov) ov.remove(); };
+    const qi=$('#pq',ov); qi.oninput=()=>{ q=qi.value; const pos=qi.selectionStart; draw(); const n=$('#pq',ov); n.focus(); n.setSelectionRange(pos,pos); };
+    ov.querySelectorAll('[data-mf]').forEach(b=>b.onclick=()=>{ mf=mf===b.dataset.mf?'':b.dataset.mf; draw(); });
+    ov.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{ const e=EXDB.find(x=>x.id===b.dataset.pick); S.routine[day].push({id:e.id,sets:e.def.sets,reps:e.def.reps}); S.exlog.push({id:e.id,action:'add',date:today(),ts:Date.now()}); ov.remove(); draft=null; save(); toast(e.name+' added. It calibrates on your next '+DAY_NAME[day]+' day.'); render(); });
+  };
+  draw();
+}
+
 /* ---- Sign in ---- */
 function renderAuth(){
   root.innerHTML=`<div class="auth">
@@ -448,7 +527,7 @@ function renderSetup(){
   $('#go').onclick=()=>{
     const units=$('#units').value; const w=+$('#weight').value;
     S=S||blank(); S.profile={units, age:+$('#age').value, heightCm:+$('#height').value, weightKg:units==='lb'?w*KG:w, pull:$('#pull').value, created:today()};
-    S.settings.rest=+$('#rest').value||120; S.bw.push({date:today(), kg:S.profile.weightKg}); save(); render();
+    S.routine=defaultRoutine(S.profile.pull); S.exlog=S.exlog||[]; S.settings.rest=+$('#rest').value||120; S.bw.push({date:today(), kg:S.profile.weightKg}); save(); render();
   };
 }
 
@@ -471,7 +550,7 @@ function renderBody(){
 function onMuscleTap(m){
   selMuscle=m;
   if(view==='body'){ selEx=null; render(); return; }
-  if(view==='progress'){ const ids=EX.filter(e=>e.primary.includes(m)&&activeEx(e.day).includes(e)).map(e=>e.id); if(ids.length && !ids.includes(selEx)) selEx=ids[0]; render(); return; }
+  if(view==='progress'){ const ids=routineEx().filter(e=>e.primary.includes(m)).map(e=>e.id); if(ids.length && !ids.includes(selEx)) selEx=ids[0]; render(); return; }
   if(view==='today'){ const card=[...document.querySelectorAll('.card[data-ex]')].find(c=>{ const e=ex(c.dataset.ex); return e.primary.includes(m)||e.secondary.includes(m); });
     if(card){ selEx=card.dataset.ex; renderBody(); card.scrollIntoView({behavior:'smooth',block:'start'}); } else { renderBody(); toast(MUSCLES[m]+' is not trained today'); } return; }
   renderBody();
@@ -482,16 +561,17 @@ function renderToday(){
   const c=$('#content'); const calib=!isCalibrated(); const day=nextDay(); const list=activeEx(day);
   if(!draft || draft.day!==day || draft.calibration!==calib){
     draft={day, calibration:calib, date:today(), bwKg:currentBw(), entries:{}, notes:''};
-    for(const e of list){ const sg=suggest(e); const n=calib?1:e.sets; draft.entries[e.id]={w: sg.w!==null? sg.w : 0, sets:Array.from({length:n},()=>({r:null,warm:false,w:null})), note:sg.note, deload:!!sg.deload}; }
+    for(const e of list){ const sg=suggest(e); const pend=!calib&&needsCalib(e.id); const n=(calib||pend)?1:e.sets; draft.entries[e.id]={w: sg.w!==null? sg.w : 0, sets:Array.from({length:n},()=>({r:null,warm:false,w:null})), note:pend?'New exercise. Work up to one hard set of 5 to 8 reps; it becomes the baseline.':sg.note, deload:!!sg.deload, calib:pend}; }
   }
+  list.sort((a,b)=>(draft.entries[b.id].calib?1:0)-(draft.entries[a.id].calib?1:0));
   const head = calib
     ? `<span class="pill blue">Calibration ${calibrationsDone()+1} of 3</span><h1 style="margin-top:8px">${DAY_NAME[day]} baseline</h1><p class="muted">One hard set per exercise, 5 to 8 reps. Log the weight and the reps you got.</p>`
     : `<span class="pill">${fmtDate(today())}</span><h1 style="margin-top:8px">${DAY_NAME[day]} day</h1><p class="muted">Weights are prefilled from last time. Log reps after each set. Warm-up sets don't count toward progression.</p>`;
   let h=`${head}<div class="timer" id="timer"><div><div style="font-size:13px;opacity:.8">Rest</div><div class="t" id="tval">0:00</div></div><div><button id="tplus">+30s</button> <button id="tskip">Skip</button></div></div>`;
   for(const e of list){ const d=draft.entries[e.id]; const l=latest(e.id); const p=pr(e.id);
     const loadNote = e.load==='db'?'per dumbbell': e.load==='bw'?'added to bodyweight (negative = assisted)': e.load==='machine'?'machine':'total bar';
-    h+=`<div class="card ${d.deload?'hl':''}" data-ex="${e.id}">
-      <div class="row spread"><div><h2 style="cursor:pointer" class="exname" data-ex="${e.id}">${e.name}</h2><div class="faint" style="font-size:13px">${e.sets}×${e.reps} · ${loadNote}${l?` · last ${fmtW(l.sets[0].w)} · best e1RM ${fmtW(p.best)}`:''}</div></div>
+    h+=`<div class="card ${d.deload||d.calib?'hl':''}" data-ex="${e.id}">
+      <div class="row spread"><div><h2 style="cursor:pointer" class="exname" data-ex="${e.id}">${e.name}${d.calib?' <span class="pill blue">Calibrate</span>':''}</h2><div class="faint" style="font-size:13px">${e.sets}×${e.reps} · ${loadNote}${l?` · last ${fmtW(l.sets[0].w)} · best e1RM ${fmtW(p.best)}`:''}</div></div>
         <div class="stepper"><button data-a="-">−</button><input type="number" step="${e.inc[unit()]}" value="${+fromKg(d.w).toFixed(2)}" data-w="${e.id}"><button data-a="+">+</button></div><span class="faint" style="font-size:13px">${unit()}</span></div>
       <div class="muted" style="font-size:14px;margin-top:6px">${d.note}</div>
       <div class="sets"><div class="h">Set</div><div class="h">Reps</div><div class="h">e1RM</div><div class="h"></div>`;
@@ -503,7 +583,7 @@ function renderToday(){
         <div class="row setrow" style="gap:8px;flex-wrap:nowrap">${wField}<div class="stepper"><button data-a="-" data-s="${i}">−</button><input type="number" value="${done?st.r:e.reps}" data-r="${e.id}" data-s="${i}"><button data-a="+" data-s="${i}">+</button></div></div>
         <div class="num ${done?'':'faint'}">${st.warm?'<span class="faint warmlbl" style="font-size:13px">warm-up</span>':val}</div>
         <div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn small ${done?'ghost':'primary'}" data-log="${e.id}" data-s="${i}">${done?'Logged':'Log set'}</button>${st.warm?`<button class="xbtn" data-rm="${e.id}" data-s="${i}" title="Remove warm-up">×</button>`:''}</div>`; });
-    h+=`</div>${calib?'':`<button class="btn small ghost" style="margin-top:10px" data-addwarm="${e.id}">+ Warm-up set</button>`}</div>`; }
+    h+=`</div>${calib||d.calib?'':`<button class="btn small ghost" style="margin-top:10px" data-addwarm="${e.id}">+ Warm-up set</button>`}</div>`; }
   h+=`<div class="card"><h3 style="margin-bottom:8px">Notes</h3><textarea id="notes" placeholder="Form cues, sleep, aches, anything worth remembering">${draft.notes||''}</textarea></div>`;
   h+=`<div class="row spread" style="margin-top:8px"><button class="btn ghost" id="discard">Discard</button><button class="btn primary" id="finish">Finish ${calib?'calibration':'workout'}</button></div>`;
   c.innerHTML=h;
@@ -527,7 +607,7 @@ function renderToday(){
 function finishSession(){
   const entries={}; let any=false, unlogged=0;
   for(const id in draft.entries){ const d=draft.entries[id]; unlogged+=d.sets.filter(s=>s.r===null&&!s.warm).length;
-    const sets=d.sets.filter(s=>s.r!==null).map(s=>({w:+((s.warm?s.w:d.w)).toFixed(3), r:s.r, warm:!!s.warm})); if(sets.some(x=>!x.warm)){ any=true; entries[id]={sets}; } }
+    const sets=d.sets.filter(s=>s.r!==null).map(s=>({w:+((s.warm?s.w:d.w)).toFixed(3), r:s.r, warm:!!s.warm})); if(sets.some(x=>!x.warm)){ any=true; entries[id]=d.calib?{sets,calib:true}:{sets}; } }
   if(!any){ toast('Log at least one working set first'); return; }
   if(unlogged && !confirm(`${unlogged} working set${unlogged>1?'s':''} not logged. Finish anyway?`)) return;
   const before={}; for(const id in entries){ const p=pr(id); before[id]=p?p.best:0; }
@@ -576,7 +656,7 @@ function renderMuscle(){
   const c=$('#content');
   if(!selMuscle){ c.innerHTML=`<h1>Body map</h1><p class="muted">Tap a muscle on the left to see how its strength has changed since calibration. Colour shows where you sit against strength standards for a ${S.profile.age}-year-old male at your bodyweight.</p>
     <div class="grid2">${Object.keys(MUSCLES).map(m=>{ const sc=muscleScore(m); return `<div class="card" style="border-left:6px solid ${heat(sc)}"><div class="row spread"><b>${MUSCLES[m]}</b><span class="faint">${sc===null?'no data':levelName(sc)}</span></div></div>`; }).join('')}</div>`; return; }
-  const m=selMuscle; const ids=EX.filter(e=>e.primary.includes(m)).map(e=>e.id).filter(id=>activeEx(ex(id).day).some(e=>e.id===id));
+  const m=selMuscle; const ids=routineEx().filter(e=>e.primary.includes(m)).map(e=>e.id);
   const sc=muscleScore(m);
   // strength index: average of e1RM/baseline across primary exercises, per date
   const byDate={};
@@ -595,16 +675,16 @@ function renderMuscle(){
 
 /* ---- Progress ---- */
 function renderProgress(){
-  const c=$('#content'); let all=EX.filter(e=>activeEx(e.day).includes(e));
+  const c=$('#content'); let all=routineEx(); const retired=EXDB.filter(e=>!all.some(x=>x.id===e.id) && historyAll(e.id).length).map(e=>ex(e.id));
   if(selMuscle){ const f=all.filter(e=>e.primary.includes(selMuscle)); if(f.length) all=f; }
-  if(!selEx || !all.some(x=>x.id===selEx)) selEx=all[0].id; const e=ex(selEx); const h=history(e.id); const p=pr(e.id); const b=baseline(e.id); const sc=exScore(e.id);
+  if(!selEx || !(all.some(x=>x.id===selEx)||retired.some(x=>x.id===selEx))) selEx=all[0].id; const e=ex(selEx); const h=history(e.id); const p=pr(e.id); const b=baseline(e.id); const sc=exScore(e.id);
   const bw=currentBw(); const f=ageFactor(S.profile.age);
   const bands=[{i:0,c:'#3EBB72'},{i:2,c:'#E6C64B'},{i:3,c:'#E24A3F'}].map(x=>({y:fromKg(e.std[x.i]*f*bw), c:x.c, l:LEVELS[x.i]}));
   const pts=h.map(x=>({x:ts(x.date), y:fromKg(x.best), pr:p&&x.date===p.date&&x.best===p.best}));
   const bwpts=S.bw.map(x=>({x:ts(x.date), y:fromKg(x.kg)}));
   const series=[{name:'e1RM',c:'#3F7DFF',pts}]; if(bwpts.length>1||h.length) series.push({name:'Bodyweight',c:'#6F7784',pts:bwpts,dash:true,w:2});
   const vol=h.map(x=>({x:ts(x.date), y:fromKg(x.tonnage)}));
-  c.innerHTML=`<div class="row" style="gap:8px;margin-bottom:14px"><select id="expick" style="width:auto;font-size:18px;text-align:left">${all.map(x=>`<option value="${x.id}" ${x.id===e.id?'selected':''}>${DAY_NAME[x.day]} · ${x.name}</option>`).join('')}</select>${selMuscle?`<button class="btn small" id="clearm">${MUSCLES[selMuscle]} ×</button>`:'<span class="faint" style="font-size:13px">Tap a muscle to filter</span>'}</div>
+  c.innerHTML=`<div class="row" style="gap:8px;margin-bottom:14px"><select id="expick" style="width:auto;font-size:18px;text-align:left">${all.map(x=>`<option value="${x.id}" ${x.id===e.id?'selected':''}>${DAY_NAME[x.day]} · ${x.name}</option>`).join('')}${retired.length?`<optgroup label="Not in routine">${retired.map(x=>`<option value="${x.id}" ${x.id===e.id?'selected':''}>${x.name}</option>`).join('')}</optgroup>`:''}</select>${selMuscle?`<button class="btn small" id="clearm">${MUSCLES[selMuscle]} ×</button>`:'<span class="faint" style="font-size:13px">Tap a muscle to filter</span>'}</div>
     <h1>${e.name}</h1>
     <div class="row" style="margin:12px 0 18px;gap:28px">
       <div class="stat">${p?fmtW(p.best):'—'}<small>best e1RM${p?' · '+fmtDate(p.date):''}</small></div>
@@ -612,6 +692,7 @@ function renderProgress(){
       <div class="stat">${sc===null?'—':levelName(sc)}<small>${sc===null?'strength level':'at '+Math.round(fromKg(bw))+' '+unit()+' bodyweight'}</small></div></div>
     <div class="card">${lineChart(series,{fmtY:v=>Math.round(v),bands, y0:0, yMinTop:bands[1].y*1.05})}<div class="faint" style="font-size:13px;margin-top:6px">Dashed lines are strength-standard thresholds for your bodyweight and age. Gold dots are PRs. e1RM uses Epley: weight × (1 + reps/30), reps capped at 12.${e.load==='bw'?' Bodyweight is included in the load.':''}${e.load==='db'?' Weight is per dumbbell.':''}</div></div>
     <h3 style="margin:14px 0 8px">Session volume (weight × reps)</h3><div class="card">${lineChart([{name:'Tonnage',c:'#8FB3FF',pts:vol}],{fmtY:v=>Math.round(v)})}</div>
+    ${(()=>{ const old=historyAll(e.id).filter(x=>!h.some(y=>y.id===x.id)); if(!old.length) return ''; const ob=old.reduce((a,b)=>b.best>a.best?b:a); return `<div class="card" style="border-style:dashed"><div class="row spread"><b>Earlier record</b><span class="num">${fmtW(ob.best)} e1RM</span></div><div class="faint" style="font-size:13px">${old.length} session${old.length>1?'s':''} before ${addedOn(e.id)?'it was re-added on '+fmtDate(addedOn(e.id)):'the current run'}. Kept for reference, not counted in graphs or PRs.</div></div>`; })()}
     <h3 style="margin:14px 0 8px">Log</h3>${h.slice().reverse().map(x=>`<div class="card" style="padding:10px 16px"><div class="row spread"><b>${fmtDate(x.date)}${x.calibration?' <span class="pill">calibration</span>':''}</b><span class="num">${fmtW(x.best)}</span></div><div class="row spread"><div class="muted" style="font-size:14px">${x.sets.map(s=>fmtW(s.w)+' × '+s.r).join(' · ')}${x.notes?'<div class="faint" style="font-size:13px">'+x.notes+'</div>':''}</div><button class="btn small ghost" data-edit="${x.id}">Edit</button></div></div>`).join('')||'<div class="faint">No sessions logged yet.</div>'}`;
   $('#expick').onchange=ev=>{ selEx=ev.target.value; render(); };
   if($('#clearm')) $('#clearm').onclick=()=>{ selMuscle=null; render(); };
@@ -629,7 +710,7 @@ function renderCalendar(){
   const recent=S.sessions.slice(-8).reverse();
   const week=S.sessions.filter(s=>{ const t=ts(s.date); return Date.now()-t<7*864e5; }).length;
   const total=S.sessions.filter(s=>!s.calibration).length;
-  const prsRecent=[]; for(const e of EX){ const p=pr(e.id); if(p && Date.now()-ts(p.date)<14*864e5 && !p.calibration) prsRecent.push({e,p}); }
+  const prsRecent=[]; for(const e of routineEx()){ const p=pr(e.id); if(p && Date.now()-ts(p.date)<14*864e5 && !p.calibration) prsRecent.push({e,p}); }
   c.innerHTML=`<div class="row spread"><h1>Calendar</h1><span class="pill blue">Next: ${calib?'calibration '+(calibrationsDone()+1)+' · ':''}${DAY_NAME[nd]}</span></div>
     <div class="row" style="margin:12px 0 18px;gap:28px"><div class="stat">${week}<small>sessions in the last 7 days (target 3)</small></div><div class="stat">${total}<small>workouts since calibration</small></div></div>
     <div class="card"><div class="cal" style="margin-bottom:6px">${['S','M','T','W','T','F','S'].map(x=>`<div class="faint" style="text-align:center;font-size:12px">${x}</div>`).join('')}</div><div class="cal">${cells}</div>
@@ -649,7 +730,12 @@ function renderSettings(){
     ? `<div class="card"><h3 style="margin-bottom:8px">Account</h3><div class="row spread"><div>Signed in as <b>${sync.user||'…'}</b><div class="faint" style="font-size:13px">${{ok:'Synced',busy:'Syncing…',err:'Sync error: '+sync.msg,off:''}[sync.state]||''}</div></div><div class="row"><button class="btn small" id="syncnow">Sync now</button><button class="btn small" id="signout">Sign out</button></div></div></div>`
     : `<div class="card"><h3 style="margin-bottom:8px">Account</h3><div class="row"><input type="password" id="tok2" placeholder="GitHub token with Gists permission" style="width:100%;max-width:360px;text-align:left;font-family:var(--body);font-size:16px"><button class="btn small" id="signin2">Sign in to sync</button></div><div class="faint" style="font-size:13px;margin-top:6px">Data on this device will be merged with whatever is already in your gist.</div></div>`;
   c.innerHTML=`<h1>Settings</h1>${acct}
-    <div class="card"><h3 style="margin-bottom:8px">Profile (locked at setup)</h3><div class="row" style="gap:24px"><div class="stat">${p.age}<small>age</small></div><div class="stat">${p.heightCm}<small>cm</small></div><div class="stat">${Math.round(fromKg(p.weightKg))}<small>${p.units} at setup</small></div><div class="stat">${ex(p.pull).name}<small>pull main lift</small></div></div></div>
+    <div class="card"><h3 style="margin-bottom:8px">Profile (locked at setup)</h3><div class="row" style="gap:24px"><div class="stat">${p.age}<small>age</small></div><div class="stat">${p.heightCm}<small>cm</small></div><div class="stat">${Math.round(fromKg(p.weightKg))}<small>${p.units} at setup</small></div></div></div>
+    <div class="card"><h3 style="margin-bottom:8px">Routine</h3>${DAYS.map(d=>`<div style="margin-bottom:12px"><div class="row spread" style="margin-bottom:6px"><b>${DAY_NAME[d]}</b><button class="btn small" data-addto="${d}">+ Add exercise</button></div>
+      ${(S.routine[d]||[]).map((r,i)=>{ const e=ex(r.id); return `<div class="row spread" style="padding:8px 0;border-top:1px solid var(--line)"><div style="flex:1;min-width:160px"><div>${e.name}${needsCalib(r.id)?' <span class="pill blue">needs calibration</span>':''}</div><div class="faint" style="font-size:13px">${{bar:'barbell',db:'dumbbell',bw:'bodyweight',machine:'machine / cable'}[e.load]} · ${e.primary.map(m=>MUSCLES[m]).join(', ')}</div></div>
+        <div class="row" style="gap:6px;flex-wrap:nowrap"><input type="number" value="${r.sets}" data-rs="${d}" data-i="${i}" style="width:58px;font-size:17px;padding:6px" title="sets">×<input type="number" value="${r.reps}" data-rr="${d}" data-i="${i}" style="width:58px;font-size:17px;padding:6px" title="reps">
+        <button class="btn small ghost" data-mv="${d}" data-i="${i}" data-dir="-1" ${i===0?'disabled':''}>↑</button><button class="btn small ghost" data-mv="${d}" data-i="${i}" data-dir="1" ${i===S.routine[d].length-1?'disabled':''}>↓</button><button class="xbtn" data-rmx="${d}" data-i="${i}" title="Remove">×</button></div></div>`; }).join('')||'<div class="faint">Empty day.</div>'}</div>`).join('')}
+      <div class="faint" style="font-size:13px">New exercises get a one-set calibration on their next workout day before they count. Removed exercises keep their history and start fresh if you add them back.</div></div>
     <div class="card"><h3 style="margin-bottom:8px">Bodyweight log</h3><div class="row"><input type="number" id="bwin" step="0.1" value="${+fromKg(currentBw()).toFixed(1)}"><span class="muted">${p.units}</span><button class="btn small" id="bwadd">Log today</button></div>
       <div class="muted" style="font-size:14px;margin-top:8px">${S.bw.slice(-6).reverse().map(x=>fmtDate(x.date)+': '+fmtW(x.kg)).join(' · ')}</div><div class="faint" style="font-size:13px;margin-top:6px">Strength standards and bodyweight exercises use the latest entry.</div></div>
     <div class="card"><h3 style="margin-bottom:8px">Rest timer</h3><div class="row"><input type="number" id="rest" value="${S.settings.rest}"><span class="muted">seconds</span><button class="btn small" id="restsave">Save</button></div></div>
@@ -659,6 +745,11 @@ function renderSettings(){
   if($('#syncnow')) $('#syncnow').onclick=()=>pullNow().then(()=>{ toast(sync.state==='ok'?'Synced':'Sync failed: '+sync.msg); render(); });
   if($('#signout')) $('#signout').onclick=()=>{ const erase=confirm('Also erase the data stored on this device? (It stays in your gist.)\n\nOK = erase local copy · Cancel = keep it'); signOut(erase); render(); };
   if($('#signin2')) $('#signin2').onclick=async()=>{ const t=$('#tok2').value.trim(); if(!t) return; try{ await signIn(t); toast('Signed in as '+sync.user); }catch(e){ store.setToken(null); toast(e.message); } render(); };
+  const routineChanged=()=>{ draft=null; save(); render(); };
+  c.querySelectorAll('[data-rs],[data-rr]').forEach(inp=>inp.onchange=()=>{ const d=inp.dataset.rs||inp.dataset.rr, i=+inp.dataset.i; const v=Math.max(1,Math.min(20,+inp.value||1)); if(inp.dataset.rs) S.routine[d][i].sets=v; else S.routine[d][i].reps=v; draft=null; save(); });
+  c.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{ const d=b.dataset.mv, i=+b.dataset.i, j=i+(+b.dataset.dir); const a=S.routine[d]; [a[i],a[j]]=[a[j],a[i]]; routineChanged(); });
+  c.querySelectorAll('[data-rmx]').forEach(b=>b.onclick=()=>{ const d=b.dataset.rmx, i=+b.dataset.i; const id=S.routine[d][i].id; if(!confirm('Remove '+ex(id).name+' from '+DAY_NAME[d]+' day? Its history is kept.')) return; S.routine[d].splice(i,1); S.exlog.push({id,action:'remove',date:today(),ts:Date.now()}); routineChanged(); });
+  c.querySelectorAll('[data-addto]').forEach(b=>b.onclick=()=>openPicker(b.dataset.addto));
   $('#bwadd').onclick=()=>{ const kg=toKg(+$('#bwin').value); if(!kg) return; const i=S.bw.findIndex(x=>x.date===today()); if(i>=0) S.bw[i].kg=kg; else S.bw.push({date:today(),kg}); save(); toast('Bodyweight logged'); render(); };
   $('#restsave').onclick=()=>{ S.settings.rest=Math.max(15,+$('#rest').value||120); save(); toast('Saved'); };
   $('#exp').onclick=()=>{ const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ppl-ledger-'+today()+'.json'; a.click(); };
